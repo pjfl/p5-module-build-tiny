@@ -29,7 +29,8 @@ sub read_file {
 }
 
 sub get_meta {
-	my ($metafile) = grep { -e $_ } qw/META.json META.yml/ or die "No META information provided\n";
+	my @files = qw/META.json META.yml/; $_[ 0 ] and unshift @files, @_;
+	my ($metafile) = grep { -e $_ } @files or die "No META information provided\n";
 	return CPAN::Meta->load_file($metafile);
 }
 
@@ -132,12 +133,13 @@ sub Build {
 	my %opt;
 	GetOptionsFromArray($_, \%opt, qw/install_base=s install_path=s% installdirs=s destdir=s prefix=s config=s% uninst:1 verbose:1 dry_run:1 pureperl-only:1 create_packlist=i jobs=i/) for ($env, $bargv, \@ARGV);
 	$_ = detildefy($_) for grep { defined } @opt{qw/install_base destdir prefix/}, values %{ $opt{install_path} };
-	@opt{ 'config', 'meta' } = (ExtUtils::Config->new($opt{config}), get_meta());
+	@opt{ 'config', 'meta' } = (ExtUtils::Config->new($opt{config}), get_meta( qw/MYMETA.json MYMETA.yml/ ));
 	$actions{$action}->(%opt, install_paths => ExtUtils::InstallPaths->new(%opt, dist_name => $opt{meta}->name));
 }
 
 sub Build_PL {
 	my $meta = get_meta();
+	my $code; $meta->{dynamic_config} and $code = caller->can( 'Dynamic_Config' ) and $meta = $code->( $meta );
 	printf "Creating new 'Build' script for '%s' version '%s'\n", $meta->name, $meta->version;
 	my $dir = $meta->name eq 'Module-Build-Tiny' ? "use lib 'lib';" : '';
 	write_file('Build', "#!perl\n$dir\nuse Module::Build::Tiny;\nBuild();\n");
@@ -187,8 +189,6 @@ than 120, yet supports the features needed by most distributions.
 =head2 Not Supported
 
 =over 4
-
-=item * Dynamic prerequisites
 
 =item * HTML documentation generation
 
